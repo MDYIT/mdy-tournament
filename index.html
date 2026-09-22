@@ -303,7 +303,7 @@
   </section>
 </main>
 
-<footer><div class="fr"><span data-root="foot-name"></span><span>Scores and videos updated from the scorer's table.</span></div></footer>
+<footer><div class="fr"><span data-root="foot-name"></span><span data-root="sync">Scores and videos updated from the scorer's table.</span></div></footer>
 
 <div class="modal" id="modal" role="dialog" aria-modal="true">
   <div class="sheet" id="sheet">
@@ -316,6 +316,7 @@
 <div class="toast" id="toast"></div>
 
 <!-- ===================== APP ===================== -->
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.7.0/papaparse.min.js"></script>
 <script>
 (function(){
   "use strict";
@@ -467,7 +468,7 @@
     if(!ups.length){ el.innerHTML = emptyBox("No updates posted","Share scores, schedule changes, or info for families here.", CAP.canEdit?'add-update':null,"Post update"); return; }
     el.innerHTML = ups.map(u=>`
       <article class="post">
-        <div class="post-time">${esc(fmtTime(u.ts))}</div>
+        <div class="post-time">${esc(u.posted || fmtTime(u.ts))}</div>
         <h3>${esc(u.title)}</h3>
         <p>${esc(u.body)}</p>
         <button class="btn btn-ghost btn-sm edit-only" data-action="del-update" data-id="${u.id}">Delete</button>
@@ -709,8 +710,119 @@
     render();
   }
 
+
+  /* ---------------- live data from the Google Sheet ----------------
+     The page renders the embedded snapshot first, then reads the published
+     sheet and re-renders whenever the data changes. Logos stay embedded in
+     this file and are matched to sheet rows by team name, then badge text. */
+  const SHEET = {
+    base: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQWmZv2oqYBSVluXtMZvs-4vHyo3-uQt9XHtqV4zeRBAdSCjpqB_A0wfs_VFUFyCIfxIso1i8dew2OA/pub",
+    tabs: { tournament: 590456181, teams: 1451415506, games: 1254668490, updates: 1077246062, roster: 415936302, photos: 533809854 },
+    refreshMs: 60000
+  };
+  const LOGOS = {};
+  (state.teams || []).forEach(t => {
+    if(!t.logoUrl) return;
+    if(t.name) LOGOS["n:" + t.name.trim().toLowerCase()] = t.logoUrl;
+    if(t.abbr) LOGOS["a:" + t.abbr.trim().toLowerCase()] = t.logoUrl;
+  });
+  const EMBLEM = (state.tournament || {}).logoUrl || "";
+  const STATUS = { upcoming: "up", live: "live", final: "final" };
+  const cell = v => (v == null ? "" : String(v).trim());
+  const slug = s => cell(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || uid();
+
+  function fetchTab(name){
+    const url = `${SHEET.base}?gid=${SHEET.tabs[name]}&single=true&output=csv&_=${Date.now()}`;
+    return fetch(url, { cache: "no-store" }).then(r => {
+      if(!r.ok) throw new Error(name + " HTTP " + r.status);
+      return r.text();
+    }).then(txt => {
+      const out = Papa.parse(txt, { header: true, skipEmptyLines: "greedy" });
+      if(!out.meta.fields || !out.meta.fields.length) throw new Error(name + ": no header row");
+      return out.data;
+    });
+  }
+
+  function buildState(d){
+    const need = (rows, cols, tab) => {
+      const have = rows.length ? Object.keys(rows[0]) : [];
+      cols.forEach(c => { if(rows.length && !have.includes(c)) throw new Error(tab + ": missing column " + c); });
+    };
+    need(d.teams, ["Team"], "Teams"); need(d.games, ["Round", "Team 1", "Team 2", "Status"], "Games");
+
+    const set = {};
+    d.tournament.forEach(r => { set[cell(r.Setting).toLowerCase()] = cell(r.Value); });
+    const tournament = { name: set["name"], kicker: set["subtitle"], memorial: set["dedication"],
+      dates: set["dates"], location: set["venue"], banner: set["ticker banner"], logoUrl: EMBLEM };
+
+    const byName = {};
+    const teams = d.teams.filter(r => cell(r.Team)).map(r => {
+      const name = cell(r.Team), abbr = cell(r["Badge text"]);
+      const t = { id: slug(name), name, abbr: abbr || name.slice(0, 4).toUpperCase(),
+        color: cell(r.Color) || "#1C2C4C", division: parseInt(r.Division) || null,
+        seed: parseInt(r.Seed) || null, record: cell(r.Record), roster: [] };
+      const logo = LOGOS["n:" + name.toLowerCase()] || (abbr && LOGOS["a:" + abbr.toLowerCase()]);
+      if(logo) t.logoUrl = logo;
+      byName[name.toLowerCase()] = t;
+      return t;
+    });
+    const teamId = v => {
+      const n = cell(v).toLowerCase();
+      if(!n) return null;
+      if(byName[n]) return byName[n].id;
+      console.warn("Sheet: unknown team name", v);
+      return null;
+    };
+
+    (d.roster || []).forEach(r => {
+      const t = byName[cell(r.Team).toLowerCase()];
+      if(!t){ if(cell(r.Player)) console.warn("Sheet: roster row for unknown team", r.Team); return; }
+      if(!cell(r.Player)) return;
+      t.roster.push({ id: uid(), num: cell(r.Number), name: cell(r.Player), pos: cell(r.Position), grade: cell(r.Year), ht: cell(r.Height) });
+    });
+
+    const games = d.games.filter(r => cell(r.Round) || cell(r["Team 1"]) || cell(r["Team 2"])).map((r, i) => {
+      const st = STATUS[cell(r.Status).toLowerCase()];
+      if(!st && cell(r.Status)) console.warn("Sheet: unknown status", r.Status);
+      return { id: "g" + i, round: cell(r.Round) || "Games", a: teamId(r["Team 1"]), b: teamId(r["Team 2"]),
+        sa: parseInt(r["Score 1"]) || 0, sb: parseInt(r["Score 2"]) || 0, status: st || "up",
+        time: cell(r["Tip-off"]), court: cell(r.Court), video: cell(r["Video link"]) };
+    });
+
+    const updates = (d.updates || []).filter(r => cell(r.Headline)).map((r, i) => (
+      { id: "u" + i, ts: i, posted: cell(r.Posted), title: cell(r.Headline), body: cell(r.Message) }));
+
+    const photos = (d.photos || []).filter(r => cell(r["Image link"])).map((r, i) => (
+      { id: "p" + i, url: cell(r["Image link"]), caption: cell(r.Caption) }));
+
+    return { tournament, teams, games, updates, photos };
+  }
+
+  let lastSheet = "";
+  const syncEl = () => root('sync');
+  const SYNC_OK = syncEl() ? syncEl().textContent : "";
+  async function loadSheet(){
+    if(!window.Papa){ syncEl().textContent = "Showing saved results. Live updates will resume shortly."; return; }
+    try{
+      const names = Object.keys(SHEET.tabs);
+      const rows = await Promise.all(names.map(fetchTab));
+      const d = {}; names.forEach((n, i) => d[n] = rows[i]);
+      const next = buildState(d);
+      const key = JSON.stringify(next);
+      syncEl().textContent = SYNC_OK;
+      if(key === lastSheet) return;
+      lastSheet = key;
+      state = next;
+      render();
+    }catch(err){
+      console.warn("Sheet load failed; keeping current results.", err);
+      syncEl().textContent = "Showing saved results. Live updates will resume shortly.";
+    }
+  }
+
   render();
-  initCaps();
+  loadSheet();
+  setInterval(loadSheet, SHEET.refreshMs);
 })();
 </script>
 </body>
