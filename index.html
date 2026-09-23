@@ -154,7 +154,7 @@
 
   /* ---------- Team cards ---------- */
   .teams-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:14px}
-  .team-card{position:relative; text-align:left; background:var(--card); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow); cursor:pointer; overflow:hidden; padding:0; width:100%; font-family:var(--sans)}
+  .team-card{position:relative; display:flex; flex-direction:column; justify-content:flex-start; align-items:stretch; text-align:left; background:var(--card); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow); cursor:pointer; overflow:hidden; padding:0; width:100%; font-family:var(--sans)}
   .team-card:hover{border-color:var(--steel-2)}
   .team-card:focus-visible{outline:2px solid var(--amber); outline-offset:2px}
   .tc-bar{height:8px}
