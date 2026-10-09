@@ -69,6 +69,22 @@
   .board-meta span{display:inline-flex; align-items:center; gap:7px}
   .board-meta svg{width:15px;height:15px;stroke:var(--amber);fill:none;stroke-width:2}
 
+  /* ---------- Banner photo ---------- */
+  .board-inner{display:grid; grid-template-columns:minmax(0,max-content) minmax(220px,1fr); column-gap:28px}
+  .board-inner > *{grid-column:1}
+  .board-inner > .teamstrip{grid-column:1 / -1}
+  .board-photo{grid-column:2; grid-row:1 / span 5; align-self:center; justify-self:center; width:100%; max-width:390px; padding:0; border:0; background:none; cursor:pointer}
+  .board-photo img{display:block; width:100%; height:auto; aspect-ratio:750/557; object-fit:cover; border-radius:12px; border:2px solid rgba(255,255,255,.85); box-shadow:0 10px 28px rgba(0,0,0,.45)}
+  .board-photo:hover img{border-color:var(--amber)}
+  .board-photo:focus-visible{outline:2px solid var(--amber); outline-offset:4px; border-radius:12px}
+  @media (max-width:640px){
+    .board-inner > *{grid-column:1 / -1}
+    .board-inner{grid-template-columns:minmax(0,1fr) auto}
+    .board-inner > .emblem{grid-column:1; grid-row:1}
+    .board-photo{grid-column:2; grid-row:1; align-self:start; justify-self:end; width:116px}
+    .board-photo img{border-radius:9px}
+  }
+
   /* ticker */
   .ticker{border-top:1px solid rgba(255,255,255,.08); border-bottom:1px solid rgba(255,255,255,.08); background:var(--board-2); overflow:hidden; position:relative}
   .ticker-track{display:inline-flex; gap:0; white-space:nowrap; padding:9px 0; animation:crawl 46s linear infinite; will-change:transform}
@@ -241,6 +257,10 @@
   .letter .sig{font-family:var(--semi); font-weight:700; font-size:16px; color:var(--steel); margin-top:1.4em}
   @media (max-width:560px){ .letter{padding-left:16px} .letter p{font-size:16px} }
 
+  .remember{margin-top:34px; padding-top:26px; border-top:1px solid var(--line)}
+  .remember h3{font-size:clamp(22px,3.6vw,28px); color:var(--ink); margin-bottom:14px}
+  .remember p{margin:0 0 1em; font-size:17px; line-height:1.65; color:var(--ink); max-width:62ch}
+  @media (max-width:560px){ .remember p{font-size:16px} }
   footer{max-width:1080px; margin:0 auto; padding:0 20px 40px; color:var(--steel); font-size:13px}
   footer .fr{border-top:1px solid var(--line); padding-top:18px; display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap}
 
@@ -267,6 +287,7 @@
     <div data-root="memorial"></div>
     <div class="board-meta" data-root="meta"></div>
     <div class="teamstrip" data-root="teamstrip"></div>
+    <button class="board-photo" type="button" aria-label="In memory of Elliot Torkieh A&quot;H. Open the In Memory page"><img alt="The MDY team with Elliot Torkieh A&quot;H" width="750" height="557"></button>
   </div>
   <div class="ticker"><div class="ticker-track" data-root="ticker"></div></div>
 </header>
@@ -324,6 +345,14 @@
         <p>After suffering a C6 spinal cord injury at 16, the accident left him paralyzed from the waist down. It might have physically left him down but not out. Elliot entered physical therapy and started to make his comeback. Elliot never quit, and after many months, was walking pain-free.</p>
         <p>His determination was unlike anyone else. He taught us to never quit! We honor Elliot with the naming of our tournament in his memory!</p>
         <p class="sig">Dr. Daniel J. Vitow</p>
+      </div>
+      <div class="remember">
+        <h3>Remembering Elliot</h3>
+        <p>Those who knew Elliot remember a kind-hearted, happy young man who was always smiling. He was smart, he worked hard, and he brought energy into every room he entered. As one teammate put it, he had “an infectious smile and was always sweet at heart.”</p>
+        <p>After his accident, Elliot was told he would never walk again. He refused to accept it. Through months of grueling physical therapy, he worked his way back, began to walk, and returned to school, accomplishing things no one thought possible. His perseverance was incredible.</p>
+        <p>Elliot spent a lot of time with our basketball team, in class and around the gym, and before games he was the one hyping everyone up. He inspired his teammates never to back down from a challenge, and he carried the Warrior mentality in everything he did.</p>
+        <p>Elliot passed away in June 2021. The following year, at its 20th annual tournament, Magen David renamed the Preseason Tournament in his memory. Each fall, it opens the Jewish high school basketball season, bringing teams from across the Yeshiva League to our gyms in Brooklyn.</p>
+        <p>Every time a player picks himself up after a hard fall, or refuses to quit when the game seems out of reach, he carries a piece of Elliot’s spirit onto the court. We are grateful to every team, coach and family who joins us in keeping his memory alive.</p>
       </div>
     </article>
   </section>
@@ -858,6 +887,19 @@
   loadSheet();
   setInterval(loadSheet, SHEET.refreshMs);
 })();
+</script>
+
+<script>
+  /* Banner photo: reuses the In Memory photo, and opens that page when tapped */
+  (function(){
+    var src=document.querySelector('#panel-memory figure img'), bp=document.querySelector('.board-photo');
+    if(!src||!bp) return;
+    bp.querySelector('img').src=src.getAttribute('src');
+    bp.addEventListener('click',function(){
+      var t=document.querySelector('button[data-tab="memory"]'); if(t) t.click();
+      var n=document.querySelector('.nav'); if(n) n.scrollIntoView({behavior:'smooth'});
+    });
+  })();
 </script>
 </body>
 </html>
